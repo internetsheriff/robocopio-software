@@ -1,0 +1,9 @@
+{
+  'box_type': '12 wells culture box',
+  'col_number': 4,
+  'row_number': 3,
+  'x_offset' : 24.75e-03,
+  'y_offset' : 16.68e-03,
+  'x_dish_step' : 26.0e-03,
+  'y_dish_step' : 26.0e-03
+ }

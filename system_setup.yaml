@@ -1,0 +1,6 @@
+{
+  'equipment_name': 'Robocopio',
+  'picture_step': 0.95e-03,
+  'meters_per_step_x' : 6.006e-06,
+  'meters_per_step_y' : 3.508e-06
+ }
