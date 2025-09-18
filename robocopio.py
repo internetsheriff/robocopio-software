@@ -4,24 +4,108 @@ import concurrent.futures
 import time
 from datetime import datetime
 import os
+
+import yaml
+
 import matplotlib.pyplot as plt
 import cv2
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import Menu
 from PIL import Image, ImageTk
 
 import threading
 
+with open("config.yaml") as f:
+    cfg = yaml.load(f, Loader=yaml.FullLoader)
+
+print(cfg['maintainer'])
 
 
+################ SYSTEM SETUP ###################
+
+with open("system_setup.yaml") as f:
+    system_setup = yaml.load(f, Loader=yaml.FullLoader)
+
+equipment_name = system_setup['equipment_name']
+meters_per_step_x = system_setup['meters_per_step_x']
+meters_per_step_y = system_setup['meters_per_step_y']
+
+############ END OF SYSTEM SETUP ################
+
+############ RESEARCH PARAMETERS ################
+
+#RESEARCHER = 'DP'
+#PROJECT = 'BRT'
+#LENS = '7X'
+#LIGHT = 'B'
+
+######### END OF RESEARCH PARAMETERS ############
+
+################ BOX PARAMETERS #################
+
+with open("box_setup.yaml") as f:
+    box_setup = yaml.load(f, Loader=yaml.FullLoader)
+
+box_type = box_setup['box_type']
+col_number = box_setup['col_number']
+row_number = box_setup['row_number']
+
+x_offset = box_setup['x_offset']
+y_offset = box_setup['y_offset']
+
+x_dish_step = box_setup['x_dish_step']
+y_dish_step = box_setup['y_dish_step']
+
+############# END OF BOX PARAMETERS #############
+
+############# EXPERIMENT PARAMETERS #############
+
+with open("experiment_setup.yaml") as f:
+    experiment_setup = yaml.load(f, Loader=yaml.FullLoader)
+
+dish_coordinates_changed = [tuple(item) for item in experiment_setup['dish_coordinates']]
+
+BOX = experiment_setup['box_name']
+experiment_folder = experiment_setup['experiment_folder']
+
+picture_matrix_side = experiment_setup['picture_matrix_side']
+picture_step = experiment_setup['picture_step']
+
+border_matrix_side = experiment_setup['border_matrix_side']
+border_from_center = experiment_setup['border_from_center']
+
+dish_number = experiment_setup['dish_number']
+
+dish_coordinates = [tuple(item) for item in experiment_setup['dish_coordinates']]
+
+
+######## END OF EXPERIMENT PARAMETERS ###########
+
+
+########## INITIALIZE CORE VARIABLES ############
 pause_event = threading.Event()
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("Error: Could not open camera.")
     exit()
 
-ser = serial.Serial('COM9', 115200, timeout=1)
+#ser = serial.Serial('COM9', 115200, timeout=1)
+
+###### END OF INITIALIZE CORE VARIABLES ########
+
+############ CREATE GLOBALS ####################
+
+picture_positions = []
+border_positions = []
+dish_centers = []
+coordinat_list = []
+movements_list = []
+
+########## END OF CREATE GLOBALS ##############
+
+
 
 def send_xy(x, y, max_retries=3):
     msg = f"\x02{x},{y}\x03".encode()
@@ -56,8 +140,8 @@ def wait_until_ready():
 def move_stage(app):
     idx = 0 
     for movement in movements_list: 
-        send_xy(movement[0]/meters_per_step_x,  movement[1]/meters_per_step_y);
-        wait_until_ready()
+        #send_xy(movement[0]/meters_per_step_x,  movement[1]/meters_per_step_y);
+        #wait_until_ready()
         if movement[3] == "STOP":
             pause_event.clear()
             app.window.after(0, app.ask_confirmation)  # Ask in main thread
@@ -70,103 +154,17 @@ def move_stage(app):
     print('DONE')
 
 def move_stage_backgorund(app):
-    wait_until_ready()
+    #wait_until_ready()
     t1 = threading.Thread(target=move_stage, args=(app,))
     t1.start()
 
-
-###### GLOBALS
-
-
-
-picture_positions = []
-border_positions = []
-dish_centers = []
-coordinat_list = []
-movements_list = []
-
-###### END GLOBALS
-###### System setup
-meters_per_step_x = 6.006e-06
-meters_per_step_y = 3.508e-06
-
-###### End system setup
-
-###### Research parameters
-
-
-
-#RESEARCHER = 'DP'
-#PROJECT = 'BRT'
-#LENS = '7X'
-#LIGHT = 'B'
-
-
-
-###### Box parameters
-
-col_number = 4
-row_number = 3
-
-x_offset = 24.75e-03
-y_offset = 16.68e-03
-#x_offset = 2
-#y_offset = 3
-
-#x_offset = 21.75e-03
-#y_offset = 14.82e-03
-
-x_dish_step = 26.0e-03;
-y_dish_step = 26.0e-03;
-
-#x_dish_step = 1
-#y_dish_step = 1
-##### End Box parameters
-
-##### Experiment parameters
-BOX = 'C6'
-experiment_folder = "C6_22"
-
-dish_number = 7
-dish_coordinates = [
-    (0,0,"S10"),
-    (1,0,"0V4"),
-    (2,0,"0V5"),
-    (3,0,"0V6"),
-    (0,1,"004"),
-    (1,1,"005"),
-    (2,1,"006"),
-    (3,1,"SIL"),
-    (2,2,"0CP"),
-    (3,2,"0CN"),
-]
-""" 
-dish_coordinates = [
-    (3,2,"0V7"),
-    (2,2,"0V8"),
-    (1,2,"0V9"),
-    (0,2,"0V1"),
-    (3,1,"A15"),
-    (2,1,"0V2"),
-    (1,1,"0V3"),
-    (1,0,"0CP"),
-    (0,0,"0CP"),
-]   """
-
-picture_matrix_side = 7
-picture_step = 0.95e-03
-
-border_matrix_side = 2
-border_from_center = 6e-03
-
-#picture_step = 0.1
-
-##### End of Experiment parameters
 
 class CameraApp(tk.Tk):
     def __init__(self, window, window_title="Camera Feed"):
         self.window = window
         self.window.title(window_title)
+
+        self.create_menu()
 
         self.vid = cap  # Open the default camera (0)
 
@@ -184,6 +182,84 @@ class CameraApp(tk.Tk):
         self.update_frame()
 
         self.window.mainloop()
+
+    def create_menu(self):
+        # Create menu bar
+        menubar = Menu(self.window)
+        self.window.config(menu=menubar)
+        
+        # File menu
+        file_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        file_menu.add_command(label="New", command=self.file_new)
+        file_menu.add_command(label="Open", command=self.file_open)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.window.quit)
+        
+        # Camera menu
+        camera_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Camera", menu=camera_menu)
+        camera_menu.add_command(label="Take Snapshot", command=self.snapshot)
+        camera_menu.add_command(label="Camera Settings", command=self.camera_settings)
+        
+        # Analysis menu
+        analysis_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Analysis", menu=analysis_menu)
+        analysis_menu.add_command(label="Calculate Movement", command=self.calculate_movment)
+        analysis_menu.add_command(label="Plot Results", command=self.start_movement)
+        analysis_menu.add_separator()
+        analysis_menu.add_command(label="Clear Results", command=self.clear_results)
+        
+        # View menu
+        view_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="View", menu=view_menu)
+        view_menu.add_command(label="Fullscreen", command=self.toggle_fullscreen)
+        view_menu.add_command(label="Zoom In", command=self.zoom_in)
+        view_menu.add_command(label="Zoom Out", command=self.zoom_out)
+        
+        # Help menu
+        help_menu = Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self.show_about)
+        help_menu.add_command(label="Documentation", command=self.show_docs)
+
+    # Menu command methods
+    def file_new(self):
+        print("New file created")
+        # Add your new file logic here
+
+    def file_open(self):
+        print("Open file dialog")
+        # Add file open logic here
+
+    def camera_settings(self):
+        print("Open camera settings")
+        # Add camera settings dialog here
+
+    def clear_results(self):
+        print("Clear analysis results")
+        # Add clear results logic here
+
+    def toggle_fullscreen(self):
+        print("Toggle fullscreen")
+        # Add fullscreen toggle logic here
+
+    def zoom_in(self):
+        print("Zoom in")
+        # Add zoom in logic here
+
+    def zoom_out(self):
+        print("Zoom out")
+        # Add zoom out logic here
+
+    def show_about(self):
+        print("Show about dialog")
+        # Add about dialog here
+
+    def show_docs(self):
+        print("Show documentation")
+        # Add documentation display here
+
 
     def snapshot(self):
         # Get a frame from the video source
@@ -327,4 +403,3 @@ class CameraApp(tk.Tk):
 # Create a Tkinter window and pass it to the CameraApp class
 root = tk.Tk()
 app = CameraApp(root)
-
