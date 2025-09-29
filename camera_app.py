@@ -17,8 +17,8 @@ from PIL import Image, ImageTk
 import threading
 
 from stage_control import *
-from setup_manager import *
-
+#from setup_manager import *
+from data_manager import *
 
 
 class CameraApp(tk.Tk):
@@ -28,7 +28,11 @@ class CameraApp(tk.Tk):
 
         self.create_menu()
 
-        self.vid = cap  # Open the default camera (0)
+        # Initialize AppData instead of using globals
+        self.data = AppData()
+        self.data.initialize_hardware()
+
+        self.vid = self.data.cap  # Open the default camera (0)
 
         self.canvas = tk.Canvas(window, width=self.vid.get(cv2.CAP_PROP_FRAME_WIDTH), 
                                 height=self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
@@ -185,60 +189,60 @@ class CameraApp(tk.Tk):
 
     def calculate_picture_positions(self):
         ##### Calculate Raster positions
-        for y in range(picture_matrix_side):
-            for x in range(picture_matrix_side):
-                #picture_positions.append((-1*picture_step+x*picture_step, 1*picture_step-y*picture_step, y, x))
-                px = -0.5 * (picture_matrix_side - 1) * picture_step + x * picture_step
-                py = 0.5 * (picture_matrix_side - 1) * picture_step - y * picture_step
-                picture_positions.append((px, py, y, x))  # (x, y, grid_row, grid_col)
+        for y in range(self.data.picture_matrix_side):
+            for x in range(self.data.picture_matrix_side):
+                #self.data.picture_positions.append((-1*self.data.picture_step+x*self.data.picture_step, 1*self.data.picture_step-y*self.data.picture_step, y, x))
+                px = -0.5 * (self.data.picture_matrix_side - 1) * self.data.picture_step + x * self.data.picture_step
+                py = 0.5 * (self.data.picture_matrix_side - 1) * self.data.picture_step - y * self.data.picture_step
+                self.data.picture_positions.append((px, py, y, x))  # (x, y, grid_row, grid_col)
         ##### End of Raster positions
 
         ##### Calculate Raster positions
-        #for y in range(border_matrix_side):
-        #    for x in range(border_matrix_side):
-        #        border_positions.append((-0.5 * (border_matrix_side-1) * border_from_center + x * border_from_center, 0.5 * (border_matrix_side-1) * border_from_center - y * border_from_center, f'{y}{x}'))
+        #for y in range(self.data.border_matrix_side):
+        #    for x in range(self.data.border_matrix_side):
+        #        self.data.border_positions.append((-0.5 * (self.data.border_matrix_side-1) * self.data.border_from_center + x * self.data.border_from_center, 0.5 * (self.data.border_matrix_side-1) * self.data.border_from_center - y * self.data.border_from_center, f'{y}{x}'))
         ##### End of Raster positions
 
-        #for dx in [-border_matrix_side, border_matrix_side]:
-        #    border_positions.append((dx, 0))  # (x, 0)
+        #for dx in [-self.data.border_matrix_side, self.data.border_matrix_side]:
+        #    self.data.border_positions.append((dx, 0))  # (x, 0)
         #    print(f'Point added: {(dx, 0)}')
 
-        #for dy in [-border_matrix_side, border_matrix_side]:
-        #    border_positions.append((0, dy))  # (0, y)
+        #for dy in [-self.data.border_matrix_side, self.data.border_matrix_side]:
+        #    self.data.border_positions.append((0, dy))  # (0, y)
         #    print(f'Point added: {(0, dy)}')
 
-        for delta in [-border_from_center, border_from_center]:
-            border_positions.append((delta, 0, 0 , 0))
-            border_positions.append((0, delta, border_matrix_side, 0))
+        for delta in [-self.data.border_from_center, self.data.border_from_center]:
+            self.data.border_positions.append((delta, 0, 0 , 0))
+            self.data.border_positions.append((0, delta, self.data.border_matrix_side, 0))
 
-        for point in border_positions:
+        for point in self.data.border_positions:
             print(point)
 
     def calculate_global_positions(self):
         ##### Calculate global positions
-        coordinat_list.append((0,0, "origin", "PASS"))
-        for dish in dish_coordinates:
-            dish_centers.append((x_offset + dish[0]*x_dish_step, -y_offset - dish[1]*y_dish_step, dish[0], dish[1], dish[2]))
+        self.data.coordinat_list.append((0,0, "origin", "PASS"))
+        for dish in self.data.dish_coordinates:
+            self.data.dish_centers.append((self.data.x_offset + dish[0]*self.data.x_dish_step, -self.data.y_offset - dish[1]*self.data.y_dish_step, dish[0], dish[1], dish[2]))
 
-        for point in dish_centers:
-            coordinat_list.append((point[0] , point[1], f'foc_sjust', "STOP"))
-            for offset in picture_positions:
+        for point in self.data.dish_centers:
+            self.data.coordinat_list.append((point[0] , point[1], f'foc_sjust', "STOP"))
+            for offset in self.data.picture_positions:
                 if offset[2] == 0 and offset[3] == 0:
-                    coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{BOX}_{point[4]}_{point[2]}{point[3]}_00_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
+                    self.data.coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{self.data.box_name}_{point[4]}_{point[2]}{point[3]}_00_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
                 else:
-                    coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{BOX}_{point[4]}_{point[2]}{point[3]}_00_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
+                    self.data.coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{self.data.box_name}_{point[4]}_{point[2]}{point[3]}_00_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
             
-            for offset in border_positions:
+            for offset in self.data.border_positions:
                 if offset[2] == 0 and offset[3] == 0:
-                    coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{BOX}_{point[4]}_{point[2]}{point[3]}_01_{offset[2]:02d}_{offset[3]:02d}', "STOP"))
+                    self.data.coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{self.data.box_name}_{point[4]}_{point[2]}{point[3]}_01_{offset[2]:02d}_{offset[3]:02d}', "STOP"))
                 else:
-                    coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{BOX}_{point[4]}_{point[2]}{point[3]}_01_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
+                    self.data.coordinat_list.append((point[0] + offset[0], point[1] + offset[1], f'{self.data.box_name}_{point[4]}_{point[2]}{point[3]}_01_{offset[2]:02d}_{offset[3]:02d}', "PASS"))
 
-        coordinat_list.append((0,0, "origin", "PASS"))
+        self.data.coordinat_list.append((0,0, "origin", "PASS"))
 
 
     def plot_picture_points(self):
-        coodinates = [t[0:2] for t in coordinat_list]
+        coodinates = [t[0:2] for t in self.data.coordinat_list]
         x_coordinates, y_coordinates = zip(*coodinates)
 
         fig, ax = plt.subplots()
@@ -251,18 +255,18 @@ class CameraApp(tk.Tk):
         plt.show()
 
     def points_to_vectors(self):
-        for i in range(1, len(coordinat_list)):
-            prev_x, prev_y = coordinat_list[i-1][:2]
-            curr_x, curr_y = coordinat_list[i][:2]
+        for i in range(1, len(self.data.coordinat_list)):
+            prev_x, prev_y = self.data.coordinat_list[i-1][:2]
+            curr_x, curr_y = self.data.coordinat_list[i][:2]
             dx = curr_x - prev_x  # Δx (change in X)
             dy = curr_y - prev_y  # Δy (change in Y)
-            movements_list.append((dx, dy, coordinat_list[i][2], coordinat_list[i][3]))
+            self.data.movements_list.append((dx, dy, self.data.coordinat_list[i][2], self.data.coordinat_list[i][3]))
 
 
     def plot_path(self):
         fig, ax = plt.subplots()
         last_point = (0,0)
-        for point in movements_list:
+        for point in self.data.movements_list:
             print(f'Last point: {last_point}')
             start_points_x = last_point[0]
             start_points_y = last_point[1]
