@@ -30,8 +30,8 @@ class AppData:
         
         # Core Variables
         self.pause_event = threading.Event()
-        self.cap = None
-        self.ser = None
+        self._cap = None
+        self._ser = None
         
         # Runtime Data
         self.picture_positions = []
@@ -44,6 +44,14 @@ class AppData:
         self.load_system_setup()
         self.load_box_setup()
         self.load_experiment_setup()
+
+    @property
+    def cap(self):
+        return self._cap
+    
+    @property
+    def ser(self):
+        return self._ser
 
     def load_system_setup(self):
         """Load data from YAML configuration files"""
@@ -108,18 +116,35 @@ class AppData:
     def initialize_hardware(self):
         """Initialize camera and serial connection"""
         try:
-            self.cap = cv2.VideoCapture(0)
-            if not self.cap.isOpened():
+            # Initialize camera
+            self._cap = cv2.VideoCapture(0)
+            if not self._cap.isOpened():
                 raise Exception("Could not open camera")
             
-            #self.ser = serial.Serial('COM9', 115200, timeout=1)
+            # Test camera by grabbing one frame
+            ret, frame = self._cap.read()
+            if not ret:
+                print("ERROOOOOOOOOOOOO")
+                self.release_camera()
+                #raise Exception("Could not read frame from camera")
+                self._cap = cv2.VideoCapture(0)
+                if not self._cap.isOpened():
+                    raise Exception("Could not open cameraaaaaaaaaaa")
+                
+                # Test camera by grabbing one frame
+                ret, frame = self._cap.read()
+                if not ret:
+                    self.release_camera()
+                    raise Exception("Could not read frame from cameraaaaaaaaaaaaaaaaaaaa")
+            
+            # Initialize serial
+            #self._ser = serial.Serial('COM9', 115200, timeout=1)
             print("Hardware initialized successfully")
             
         except Exception as e:
             print(f"Hardware initialization error: {e}")
-            # Set to None if initialization fails
-            self.cap = None
-            self.ser = None
+            self.cleanup()
+            raise
 
     def save_system_setup(self):
         """Save system setup back to YAML"""
@@ -167,3 +192,26 @@ class AppData:
         self.dish_centers.clear()
         self.coordinat_list.clear()
         self.movements_list.clear()
+    
+    def release_camera(self):
+        """Safely release camera resources"""
+        if self._cap and self._cap.isOpened():
+            self._cap.release()
+            self._cap = None
+            print("Camera released")
+    
+    def release_serial(self):
+        """Safely release serial resources"""
+        if self._ser and self._ser.is_open:
+            self._ser.close()
+            self._ser = None
+            print("Serial port released")
+    
+    def cleanup(self):
+        """Release all hardware resources"""
+        self.release_camera()
+        self.release_serial()
+    
+    def __del__(self):
+        """Destructor to ensure resources are released"""
+        self.cleanup()

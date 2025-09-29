@@ -15,6 +15,7 @@ from tkinter import Menu
 from PIL import Image, ImageTk
 
 import threading
+from time import sleep
 
 from stage_control import *
 #from setup_manager import *
@@ -26,16 +27,17 @@ class CameraApp(tk.Tk):
         self.window = window
         self.window.title(window_title)
 
+
         self.create_menu()
 
         # Initialize AppData instead of using globals
         self.data = AppData()
         self.data.initialize_hardware()
 
-        self.vid = self.data.cap  # Open the default camera (0)
+        #self.vid = self.data.cap  # Open the default camera (0)
 
-        self.canvas = tk.Canvas(window, width=self.vid.get(cv2.CAP_PROP_FRAME_WIDTH), 
-                                height=self.vid.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.canvas = tk.Canvas(window, width=self.data.cap.get(cv2.CAP_PROP_FRAME_WIDTH), 
+                                height=self.data.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.canvas.pack()
 
         self.btn_snapshot = tk.Button(window, text="Calculate shit", width=50, command=self.calculate_movment)
@@ -53,6 +55,7 @@ class CameraApp(tk.Tk):
         self.update_frame()
 
         self.window.mainloop()
+
 
     def create_menu(self):
         # Create menu bar
@@ -134,12 +137,13 @@ class CameraApp(tk.Tk):
 
     def snapshot(self):
         # Get a frame from the video source
-        ret, frame = self.vid.read()
+        if self.data.cap and self.data.cap.isOpened():
+            ret, frame = self.data.cap.read()
 
-        if ret:
-            # Save the image
-            cv2.imwrite("frame-" + str(self.get_timestamp()) + ".jpg", 
-                        cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            if ret:
+                # Save the image
+                cv2.imwrite("frame-" + str(self.get_timestamp()) + ".jpg", 
+                            cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
     def draw_red_cross(self, frame):
         # Get frame dimensions
@@ -168,14 +172,16 @@ class CameraApp(tk.Tk):
 
     def update_frame(self):
         # Get a frame from the video source
-        ret, frame = self.vid.read()
 
-        if ret:
-            if self.red_cross_enabled:
-                frame = self.draw_red_cross(frame)
+        if self.data.cap and self.data.cap.isOpened():
+            ret, frame = self.data.cap.read()
 
-            self.photo = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
-            self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
+            if ret:
+                if self.red_cross_enabled:
+                    frame = self.draw_red_cross(frame)
+
+                self.photo = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+                self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
         self.window.after(self.delay, self.update_frame)
 
@@ -183,9 +189,6 @@ class CameraApp(tk.Tk):
         import datetime
         return datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
-    def __del__(self):
-        if self.vid.isOpened():
-            self.vid.release()
 
     def calculate_picture_positions(self):
         ##### Calculate Raster positions
