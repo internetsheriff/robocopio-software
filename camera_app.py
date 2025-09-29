@@ -16,141 +16,9 @@ from PIL import Image, ImageTk
 
 import threading
 
-################ SYSTEM SETUP ###################
+from stage_control import *
+from setup_manager import *
 
-with open("system_setup.yaml") as f:
-    system_setup = yaml.load(f, Loader=yaml.FullLoader)
-
-equipment_name = system_setup['equipment_name']
-meters_per_step_x = system_setup['meters_per_step_x']
-meters_per_step_y = system_setup['meters_per_step_y']
-
-############ END OF SYSTEM SETUP ################
-
-############ RESEARCH PARAMETERS ################
-
-#RESEARCHER = 'DP'
-#PROJECT = 'BRT'
-#LENS = '7X'
-#LIGHT = 'B'
-
-######### END OF RESEARCH PARAMETERS ############
-
-################ BOX PARAMETERS #################
-
-with open("box_setup.yaml") as f:
-    box_setup = yaml.load(f, Loader=yaml.FullLoader)
-
-box_type = box_setup['box_type']
-col_number = box_setup['col_number']
-row_number = box_setup['row_number']
-
-x_offset = box_setup['x_offset']
-y_offset = box_setup['y_offset']
-
-x_dish_step = box_setup['x_dish_step']
-y_dish_step = box_setup['y_dish_step']
-
-############# END OF BOX PARAMETERS #############
-
-############# EXPERIMENT PARAMETERS #############
-
-with open("experiment_setup.yaml") as f:
-    experiment_setup = yaml.load(f, Loader=yaml.FullLoader)
-
-dish_coordinates_changed = [tuple(item) for item in experiment_setup['dish_coordinates']]
-
-BOX = experiment_setup['box_name']
-experiment_folder = experiment_setup['experiment_folder']
-
-picture_matrix_side = experiment_setup['picture_matrix_side']
-picture_step = experiment_setup['picture_step']
-
-border_matrix_side = experiment_setup['border_matrix_side']
-border_from_center = experiment_setup['border_from_center']
-
-dish_number = experiment_setup['dish_number']
-
-dish_coordinates = [tuple(item) for item in experiment_setup['dish_coordinates']]
-
-
-######## END OF EXPERIMENT PARAMETERS ###########
-
-
-########## INITIALIZE CORE VARIABLES ############
-pause_event = threading.Event()
-
-cap = cv2.VideoCapture(0)
-if not cap.isOpened():
-    print("Error: Could not open camera.")
-    exit()
-
-#ser = serial.Serial('COM9', 115200, timeout=1)
-
-###### END OF INITIALIZE CORE VARIABLES ########
-
-############ CREATE GLOBALS ####################
-
-picture_positions = []
-border_positions = []
-dish_centers = []
-coordinat_list = []
-movements_list = []
-
-########## END OF CREATE GLOBALS ##############
-
-
-
-def send_xy(x, y, max_retries=3):
-    msg = f"\x02{x},{y}\x03".encode()
-
-    for attempt in range(max_retries):
-        ser.write(msg)
-        print(f"Sent: {msg}")
-        time.sleep(1)
-        response = ser.readline().strip()
-        if response == b'ACK':
-            print("✅ Command acknowledged")
-            return True
-        else:
-            print(f"⚠️ Attempt {attempt+1} failed. Response: {response}")
-    print("❌ Failed to get ACK from ESP32.")
-    return False
-
-def wait_until_ready():
-    while True:
-        ser.write(b'STATUS?\n')
-        status = ser.readline().strip()
-        if status == b'READY':
-            print("✅ Controller is ready")
-            return
-        elif status == b'BUSY':
-            print("⏳ Still moving...")
-        else:
-            print(f"⚠️ Unexpected: {status}")
-        time.sleep(0.2)
-
-
-def move_stage(app):
-    idx = 0 
-    for movement in movements_list: 
-        #send_xy(movement[0]/meters_per_step_x,  movement[1]/meters_per_step_y);
-        #wait_until_ready()
-        if movement[3] == "STOP":
-            pause_event.clear()
-            app.window.after(0, app.ask_confirmation)  # Ask in main thread
-            pause_event.wait()  # Wait for confirmation
-        ret, frame = cap.read()
-        cv2.imwrite(f'{experiment_folder}/{movement[2]}.png', frame)
-        print(f'Image saved: {experiment_folder}/{movement[2]}')
-        idx += 1
-
-    print('DONE')
-
-def move_stage_backgorund(app):
-    #wait_until_ready()
-    t1 = threading.Thread(target=move_stage, args=(app,))
-    t1.start()
 
 
 class CameraApp(tk.Tk):
@@ -171,6 +39,11 @@ class CameraApp(tk.Tk):
 
         self.btn_gay = tk.Button(window, text="Plot shit", width=50, command=self.start_movement)
         self.btn_gay.pack(anchor=tk.CENTER, expand=True)
+
+        # Add red cross toggle button
+        self.red_cross_enabled = False
+        self.btn_toggle_cross = tk.Button(window, text="Enable Cross", width=50, command=self.toggle_red_cross)
+        self.btn_toggle_cross.pack(anchor=tk.CENTER, expand=True)
 
         self.delay = 10  # Milliseconds
         self.update_frame()
@@ -264,11 +137,38 @@ class CameraApp(tk.Tk):
             cv2.imwrite("frame-" + str(self.get_timestamp()) + ".jpg", 
                         cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
 
+    def draw_red_cross(self, frame):
+        # Get frame dimensions
+        height, width = frame.shape[:2]
+        
+        # Calculate center coordinates
+        center_x = width // 2
+        center_y = height // 2
+        
+        # Define cross size
+        cross_size = 30
+        
+        # Draw horizontal line (red color in BGR format)
+        cv2.line(frame, 
+                (center_x - cross_size, center_y), 
+                (center_x + cross_size, center_y), 
+                (0, 0, 255), 2)  # Red color, thickness 2
+        
+        # Draw vertical line (red color in BGR format)
+        cv2.line(frame, 
+                (center_x, center_y - cross_size), 
+                (center_x, center_y + cross_size), 
+                (0, 0, 255), 2)  # Red color, thickness 2
+        
+        return frame
+
     def update_frame(self):
         # Get a frame from the video source
         ret, frame = self.vid.read()
 
         if ret:
+            if self.red_cross_enabled:
+                frame = self.draw_red_cross(frame)
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
@@ -393,6 +293,12 @@ class CameraApp(tk.Tk):
         if response:  # User clicked "Yes"
             pause_event.set()  # Resume the thread
 
+    def toggle_red_cross(self):
+        self.red_cross_enabled = not self.red_cross_enabled
+        if self.red_cross_enabled:
+            self.btn_toggle_cross.config(text="Disable Red Cross")
+        else:
+            self.btn_toggle_cross.config(text="Enable Red Cross")
 
 # Create a Tkinter window and pass it to the CameraApp class
 root = tk.Tk()
