@@ -169,6 +169,7 @@ class CameraApp(tk.Tk):
         if ret:
             if self.red_cross_enabled:
                 frame = self.draw_red_cross(frame)
+
             self.photo = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
             self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
 
