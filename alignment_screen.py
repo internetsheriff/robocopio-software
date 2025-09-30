@@ -10,7 +10,7 @@ import yaml
 import matplotlib.pyplot as plt
 import cv2
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 from tkinter import Menu
 from PIL import Image, ImageTk
 
@@ -28,13 +28,12 @@ class AlignmentScreen(BaseScreen):
         self.config(bg='black')
         print("align screen shown")
 
-        #self.create_menu()
         # Initialize AppData instead of using globals
         self.data = AppData()
         self.data.initialize_hardware()
 
         # Split screen: video feed on left, controls on right
-        content_frame = tk.Frame(self)
+        content_frame = ttk.Frame(self)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
         self.canvas = tk.Canvas(content_frame, width=self.data.cap.get(cv2.CAP_PROP_FRAME_WIDTH), 
@@ -42,103 +41,69 @@ class AlignmentScreen(BaseScreen):
         self.canvas.pack(side=tk.LEFT, padx=10, pady=10)
 
         # Controls panel
-        controls_frame = tk.Frame(content_frame, width=200)
+        controls_frame = ttk.Frame(content_frame, width=200)
         controls_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
         controls_frame.pack_propagate(False)
 
-        self.btn_snapshot = tk.Button(controls_frame, text="Calculate shit", width=50, command=self.calculate_movment)
+        self.create_stage_controls(controls_frame)
+
+        self.btn_snapshot = ttk.Button(controls_frame, text="Calculate shit", command=self.calculate_movment)
         self.btn_snapshot.pack(anchor=tk.CENTER, expand=True)
 
-        self.btn_gay = tk.Button(controls_frame, text="Plot shit", width=50, command=self.start_movement)
+        self.btn_gay = ttk.Button(controls_frame, text="Plot shit", command=self.start_movement)
         self.btn_gay.pack(anchor=tk.CENTER, expand=True)
 
         # Add red cross toggle button
         self.red_cross_enabled = False
-        self.btn_toggle_cross = tk.Button(controls_frame, text="Enable Cross", width=50, command=self.toggle_red_cross)
+        self.btn_toggle_cross = ttk.Button(controls_frame, text="Enable Cross", command=self.toggle_red_cross)
         self.btn_toggle_cross.pack(anchor=tk.CENTER, expand=True)
 
         self.delay = 10  # Milliseconds
         self.update_frame()
 
-        #self.mainloop()
-
-    def create_menu(self):
-        # Create menu bar
-        menubar = Menu(self)
-        self.config(menu=menubar)
+    def create_stage_controls(self, parent):
+        # Stage control title
+        ttk.Label(parent, text="Stage Control", font=('Arial', 12, 'bold')).pack(pady=10)
         
-        # File menu
-        file_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="File", menu=file_menu)
-        file_menu.add_command(label="New", command=self.file_new)
-        file_menu.add_command(label="Open", command=self.file_open)
-        file_menu.add_separator()
-        file_menu.add_command(label="Exit", command=self.quit)
+        # Step size control
+        step_frame = ttk.Frame(parent)
+        step_frame.pack(pady=10)
         
-        # Camera menu
-        camera_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Camera", menu=camera_menu)
-        camera_menu.add_command(label="Take Snapshot", command=self.snapshot)
-        camera_menu.add_command(label="Camera Settings", command=self.camera_settings)
+        ttk.Label(step_frame, text="Step Size:").pack(side=tk.LEFT)
+        self.step_size = tk.StringVar(value="100")
+        step_entry = ttk.Entry(step_frame, textvariable=self.step_size, width=8)
+        step_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(step_frame, text="μm").pack(side=tk.LEFT)
         
-        # Analysis menu
-        analysis_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Analysis", menu=analysis_menu)
-        analysis_menu.add_command(label="Calculate Movement", command=self.calculate_movment)
-        analysis_menu.add_command(label="Plot Results", command=self.start_movement)
-        analysis_menu.add_separator()
-        analysis_menu.add_command(label="Clear Results", command=self.clear_results)
+        # Arrow buttons frame
+        arrows_frame = ttk.Frame(parent)
+        arrows_frame.pack(pady=20)
         
-        # View menu
-        view_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="View", menu=view_menu)
-        view_menu.add_command(label="Fullscreen", command=self.toggle_fullscreen)
-        view_menu.add_command(label="Zoom In", command=self.zoom_in)
-        view_menu.add_command(label="Zoom Out", command=self.zoom_out)
+        # Create arrow buttons (similar to your previous implementation)
+        btn_size = 3
         
-        # Help menu
-        help_menu = Menu(menubar, tearoff=0)
-        menubar.add_cascade(label="Help", menu=help_menu)
-        help_menu.add_command(label="About", command=self.show_about)
-        help_menu.add_command(label="Documentation", command=self.show_docs)
-
-    # Menu command methods
-    def file_new(self):
-        print("New file created")
-        # Add your new file logic here
-
-    def file_open(self):
-        print("Open file dialog")
-        # Add file open logic here
-
-    def camera_settings(self):
-        print("Open camera settings")
-        # Add camera settings dialog here
-
-    def clear_results(self):
-        print("Clear analysis results")
-        # Add clear results logic here
-
-    def toggle_fullscreen(self):
-        print("Toggle fullscreen")
-        # Add fullscreen toggle logic here
-
-    def zoom_in(self):
-        print("Zoom in")
-        # Add zoom in logic here
-
-    def zoom_out(self):
-        print("Zoom out")
-        # Add zoom out logic here
-
-    def show_about(self):
-        print("Show about dialog")
-        # Add about dialog here
-
-    def show_docs(self):
-        print("Show documentation")
-        # Add documentation display here
-
+        # Up button
+        self.btn_up = ttk.Button(arrows_frame, text="↑", width=btn_size,
+                               command=lambda: self.move_stage_meters('up'))
+        self.btn_up.grid(row=0, column=1, padx=5, pady=5)
+        
+        # Left, Stop, Right buttons
+        self.btn_left = ttk.Button(arrows_frame, text="←", width=btn_size,
+                                 command=lambda: self.move_stage_meters('left'))
+        self.btn_left.grid(row=1, column=0, padx=5, pady=5)
+        
+        self.btn_stop = ttk.Button(arrows_frame, text="●", width=btn_size,
+                                 command=lambda: self.move_stage_meters('stop'))
+        self.btn_stop.grid(row=1, column=1, padx=5, pady=5)
+        
+        self.btn_right = ttk.Button(arrows_frame, text="→", width=btn_size,
+                                  command=lambda: self.move_stage_meters('right'))
+        self.btn_right.grid(row=1, column=2, padx=5, pady=5)
+        
+        # Down button
+        self.btn_down = ttk.Button(arrows_frame, text="↓", width=btn_size,
+                                 command=lambda: self.move_stage_meters('down'))
+        self.btn_down.grid(row=2, column=1, padx=5, pady=5)
 
     def snapshot(self):
         # Get a frame from the video source
@@ -312,3 +277,11 @@ class AlignmentScreen(BaseScreen):
             self.btn_toggle_cross.config(text="Disable Red Cross")
         else:
             self.btn_toggle_cross.config(text="Enable Red Cross")
+
+    def move_stage_meters(self, x_meters, y_meters):
+        # Convert meters to steps using appdata configuration
+        x_steps = int(x_meters / self.data.meters_per_step_x)
+        y_steps = int(y_meters / self.data.meters_per_step_y)
+        
+        # Send steps to stage controller
+        self.controller.stage_controller.move_xy(x_steps, y_steps)

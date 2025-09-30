@@ -1,13 +1,22 @@
 import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
 
 from configuration_screen import *
 from alignment_screen import *
 from run_screen import *
 
+from stage_controller import *
+
 class RobocopioWindow(tk.Tk):
     def __init__(self, window_title="Camera Application"):
         super().__init__()
         self.title(window_title)
+
+        self.style = ttk.Style()
+        self.style.theme_use('clam')  # Windows modern theme
+
+        self.stage_controller = StageController()
+        self.stage_controller.connect()
         
         # Store current screen
         self.current_screen = None
@@ -23,16 +32,16 @@ class RobocopioWindow(tk.Tk):
         
     def create_main_layout(self):
         # Main horizontal layout
-        self.main_frame = tk.Frame(self)
+        self.main_frame = ttk.Frame(self)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
         
         # Left navigation menu
-        self.nav_frame = tk.Frame(self.main_frame, width=200, bg='lightblue')
+        self.nav_frame = ttk.Frame(self.main_frame, width=200)
         self.nav_frame.pack(side=tk.LEFT, fill=tk.Y)
         self.nav_frame.pack_propagate(False)  # Prevent shrinking
         
         # Right content area
-        self.content_frame = tk.Frame(self.main_frame, bg='white')
+        self.content_frame = ttk.Frame(self.main_frame)
         self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
         
         # Create navigation buttons
@@ -48,15 +57,13 @@ class RobocopioWindow(tk.Tk):
         
         for text, screen_name in nav_buttons:
             print(screen_name)
-            btn = tk.Button(
+            btn = ttk.Button(
                 self.nav_frame, 
                 text=text, 
-                font=('Arial', 12, 'bold'),
                 width=15,
-                height=3,
                 command=lambda sn=screen_name: self.show_screen(sn)
             )
-            btn.pack(fill=tk.X, padx=10, pady=10)
+            btn.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def create_screens(self):
         # Dictionary to hold all screens
