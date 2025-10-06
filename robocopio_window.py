@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import ttkbootstrap as tkb
+from ttkbootstrap.constants import *
 
 from configuration_screen import *
 from alignment_screen import *
@@ -7,13 +9,13 @@ from run_screen import *
 
 from stage_controller import *
 
-class RobocopioWindow(tk.Tk):
+class RobocopioWindow(tkb.Window):
     def __init__(self, window_title="Camera Application"):
-        super().__init__()
+        super().__init__(themename="darkly")
         self.title(window_title)
 
-        self.style = ttk.Style()
-        self.style.theme_use('clam')  # Windows modern theme
+        #self.style = ttk.Style()
+        #self.style.theme_use('clam')  # Windows modern theme
 
         self.stage_controller = StageController()
         self.stage_controller.connect()

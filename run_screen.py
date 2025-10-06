@@ -5,7 +5,7 @@ from base_screen import *
 
 class RunScreen(BaseScreen):
     def create_widgets(self):
-        self.config(bg='blue')
+        #self.config(bg='blue')
         print("run screen shown")
 
     def move_sequence_meters(self, movements_list_meters):

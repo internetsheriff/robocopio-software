@@ -25,7 +25,7 @@ from base_screen import *
 
 class AlignmentScreen(BaseScreen):
     def create_widgets(self):
-        self.config(bg='black')
+        #self.config(bg='black')
         print("align screen shown")
 
         # Initialize AppData instead of using globals

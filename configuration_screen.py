@@ -7,18 +7,14 @@ from base_screen import *
 class ConfigurationScreen(BaseScreen):
     def create_widgets(self):
         # Main container
-        self.config(bg='white')
-        
-        # Title
-        title_label = ttk.Label(self, text="Configuration", font=('Arial', 16, 'bold'), background='white')
-        title_label.pack(pady=10)
+        #self.config(bg='white')
         
         # Project selection frame
         project_frame = ttk.Frame(self, style='Card.TFrame')
         project_frame.pack(fill=tk.X, padx=20, pady=10)
         
         self.project_path = tk.StringVar()
-        ttk.Label(project_frame, text="Project:", background='white', font=('Arial', 10)).pack(side=tk.LEFT)
+        ttk.Label(project_frame, text="Project:", font=('Arial', 10)).pack(side=tk.LEFT)
         ttk.Entry(project_frame, textvariable=self.project_path, width=50, state='readonly').pack(side=tk.LEFT, padx=5)
         ttk.Button(project_frame, text="Open Project", command=self.open_project).pack(side=tk.LEFT, padx=5)
         ttk.Button(project_frame, text="New Project", command=self.new_project).pack(side=tk.LEFT, padx=5)
