@@ -37,8 +37,8 @@ def wait_until_ready():
 def move_stage(app):
     idx = 0 
     for movement in movements_list: 
-        #send_xy(movement[0]/meters_per_step_x,  movement[1]/meters_per_step_y);
-        #wait_until_ready()
+        send_xy(movement[0]/meters_per_step_x,  movement[1]/meters_per_step_y);
+        wait_until_ready()
         if movement[3] == "STOP":
             pause_event.clear()
             app.window.after(0, app.ask_confirmation)  # Ask in main thread
@@ -51,6 +51,6 @@ def move_stage(app):
     print('DONE')
 
 def move_stage_backgorund(app):
-    #wait_until_ready()
+    wait_until_ready()
     t1 = threading.Thread(target=move_stage, args=(app,))
     t1.start()

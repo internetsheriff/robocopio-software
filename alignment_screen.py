@@ -23,6 +23,7 @@ from data_manager import *
 from base_screen import *
 
 
+
 class AlignmentScreen(BaseScreen):
     def create_widgets(self):
         #self.config(bg='black')
@@ -36,9 +37,10 @@ class AlignmentScreen(BaseScreen):
         content_frame = ttk.Frame(self)
         content_frame.pack(fill=tk.BOTH, expand=True)
 
-        self.canvas = tk.Canvas(content_frame, width=self.data.cap.get(cv2.CAP_PROP_FRAME_WIDTH), 
-                                height=self.data.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        self.canvas = tk.Canvas(content_frame, width=self.data.cap.get(cv2.CAP_PROP_FRAME_WIDTH)*0.5, 
+                                height=self.data.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)*0.5)
         self.canvas.pack(side=tk.LEFT, padx=10, pady=10)
+        self.canvas.bind("<Double-Button-1>", self.on_double_click)
 
         # Controls panel
         controls_frame = ttk.Frame(content_frame, width=200)
@@ -58,7 +60,10 @@ class AlignmentScreen(BaseScreen):
         self.btn_toggle_cross = ttk.Button(controls_frame, text="Enable Cross", command=self.toggle_red_cross)
         self.btn_toggle_cross.pack(anchor=tk.CENTER, expand=True)
 
-        self.delay = 10  # Milliseconds
+        #self.btn_set_origin = ttk.Button(controls_frame, text="Set Origin", command=self.controller.stage_controller.set_origin())
+        #self.btn_set_origin.pack(anchor=tk.CENTER, expand=True)
+
+        self.delay = 100  # Milliseconds
         self.update_frame()
 
     def create_stage_controls(self, parent):
@@ -84,25 +89,25 @@ class AlignmentScreen(BaseScreen):
         
         # Up button
         self.btn_up = ttk.Button(arrows_frame, text="↑", width=btn_size,
-                               command=lambda: self.move_stage_meters('up'))
+                               command=lambda: self.move_stage_meters(0, int(self.step_size.get())/1000000, self.data))
         self.btn_up.grid(row=0, column=1, padx=5, pady=5)
         
         # Left, Stop, Right buttons
         self.btn_left = ttk.Button(arrows_frame, text="←", width=btn_size,
-                                 command=lambda: self.move_stage_meters('left'))
+                                 command=lambda: self.move_stage_meters(-int(self.step_size.get())/1000000, 0, self.data))
         self.btn_left.grid(row=1, column=0, padx=5, pady=5)
         
         self.btn_stop = ttk.Button(arrows_frame, text="●", width=btn_size,
-                                 command=lambda: self.move_stage_meters('stop'))
+                                 command=lambda: self.controller.stage_controller.to_origin())
         self.btn_stop.grid(row=1, column=1, padx=5, pady=5)
         
         self.btn_right = ttk.Button(arrows_frame, text="→", width=btn_size,
-                                  command=lambda: self.move_stage_meters('right'))
+                                  command=lambda: self.move_stage_meters( int(self.step_size.get())/1000000, 0, self.data))
         self.btn_right.grid(row=1, column=2, padx=5, pady=5)
         
         # Down button
         self.btn_down = ttk.Button(arrows_frame, text="↓", width=btn_size,
-                                 command=lambda: self.move_stage_meters('down'))
+                                 command=lambda: self.move_stage_meters(0, -int(self.step_size.get())/1000000, self.data))
         self.btn_down.grid(row=2, column=1, padx=5, pady=5)
 
     def snapshot(self):
@@ -149,6 +154,11 @@ class AlignmentScreen(BaseScreen):
             if ret:
                 if self.red_cross_enabled:
                     frame = self.draw_red_cross(frame)
+
+                # Resize frame to fit canvas size
+                canvas_width = self.canvas.winfo_width()
+                canvas_height = self.canvas.winfo_height()
+                frame = cv2.resize(frame, (canvas_width, canvas_height))
 
                 self.photo = ImageTk.PhotoImage(image=Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
                 self.canvas.create_image(0, 0, image=self.photo, anchor=tk.NW)
@@ -278,10 +288,27 @@ class AlignmentScreen(BaseScreen):
         else:
             self.btn_toggle_cross.config(text="Enable Red Cross")
 
-    def move_stage_meters(self, x_meters, y_meters):
+    def on_double_click(self, event):
+        x = event.x
+        y = event.y
+        dist_x_pixels = x - 640/2
+        dist_y_pixels = -(y - 480/2)
+        pixels_per_um = 0.475
+        dist_x_meters = (dist_x_pixels/pixels_per_um)/1000000
+        dist_y_meters = (dist_y_pixels/pixels_per_um)/1000000
+        print(f"Double-click at relative position: ({x}, {y})")
+        print(f"Dist: ({dist_x_meters}, {dist_y_meters})")
+        self.controller.stage_controller.move_xy(dist_x_meters, dist_y_meters, self.data)
+
+    def move_stage_meters(self, x_meters, y_meters, app_data):
         # Convert meters to steps using appdata configuration
-        x_steps = int(x_meters / self.data.meters_per_step_x)
-        y_steps = int(y_meters / self.data.meters_per_step_y)
+        print(f'Received {y_meters} meters')
+        #print(f'Meters per step =  {self.data.meters_per_step_y}')
+        #print(f'Sending: {int(y_meters / self.data.meters_per_step_y)}')
+        #x_steps = int(x_meters / self.data.meters_per_step_x)
+        #y_steps = int(y_meters / self.data.meters_per_step_y)
         
         # Send steps to stage controller
-        self.controller.stage_controller.move_xy(x_steps, y_steps)
+        #self.controller.stage_controller.move_xy(x_steps, y_steps)
+
+        self.controller.stage_controller.move_xy(x_meters, y_meters, app_data)

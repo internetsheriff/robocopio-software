@@ -1,6 +1,7 @@
 import threading
 import serial
 import time
+import yaml
 
 class StageController:
     def __init__(self):
@@ -10,10 +11,17 @@ class StageController:
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.sequence_callback = None  # For UI notifications
+
+        with open('position.yaml', 'r') as file:
+            position = yaml.safe_load(file)
+            x = position.get('x', 0)
+            y = position.get('y', 0)
+
+        self.origin = [x,y]
     
     def connect(self):
         try:
-            self.ser = serial.Serial('COM9', 115200, timeout=1)
+            self.ser = serial.Serial('COM16', 115200, timeout=1)
             time.sleep(2)
             self.is_connected = True
             self.running = True
@@ -24,6 +32,22 @@ class StageController:
     def set_sequence_callback(self, callback):
         """Set callback for UI notifications"""
         self.sequence_callback = callback
+
+    def move_xy(self, x_meters, y_meters, app_data, max_retries = 3):
+        #self._send_xy(x, y)
+        #    wait_until_ready()
+        print(f'Received x: {x_meters}, y: {y_meters} meters')
+        print(f'Meters per step x: {app_data.meters_per_step_x}')
+        print(f'Meters per step y: {app_data.meters_per_step_y}')
+
+        x_steps = int(x_meters / app_data.meters_per_step_x)
+        y_steps = int(y_meters / app_data.meters_per_step_y)
+
+        print(f'Sending x: {x_steps}, y: {y_steps}')
+
+        t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
+        t1.start()
+
     
     def move_sequence(self, movements_list, app_data, experiment_folder, camera_capture):
         """Execute movement sequence with pauses and image capture"""
@@ -83,6 +107,7 @@ class StageController:
             time.sleep(1)
             response = self.ser.readline().strip()
             if response == b'ACK':
+                self.update_origin(x_steps, y_steps)
                 return True
         return False
     
@@ -94,3 +119,23 @@ class StageController:
             if status == b'READY':
                 return
             time.sleep(0.2)
+
+    def update_origin(self, x, y):
+        self.origin[0] += x
+        self.origin[1] += y
+        data = {'x': self.origin[0], 'y': self.origin[1]}
+        with open('position.yaml', 'w') as file:
+            yaml.dump(data, file)
+
+    def set_origin(self):
+        self.origin[0] = 0
+        self.origin[1] = 0
+        data = {'x': self.origin[0], 'y': self.origin[1]}
+        with open('position.yaml', 'w') as file:
+            yaml.dump(data, file)
+        print('NEW ORIGIN SET')
+
+    def to_origin(self):
+        x = - self.origin[0]
+        y = - self.origin[1]
+        print(f'Back to origin -> x: {x}, y: {y}')
