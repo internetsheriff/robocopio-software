@@ -2,6 +2,9 @@ import threading
 import serial
 import time
 import yaml
+import cv2
+
+import numpy as np
 
 class StageController:
     def __init__(self):
@@ -63,7 +66,8 @@ class StageController:
 
         print(f'Sending x: {x_steps}, y: {y_steps}')
 
-        t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
+        t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
+        #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
         t1.start()
 
     
@@ -122,13 +126,122 @@ class StageController:
         msg = f"\x02{x_steps},{y_steps}\x03".encode()
         for attempt in range(max_retries):
             self.ser.write(msg)
-            time.sleep(1)
+            time.sleep(0.5)
             response = self.ser.readline().strip()
             if response == b'ACK':
                 self.update_origin(x_steps, y_steps)
                 return True
         return False
+
+    def frames_different(self, frame1, frame2):
+        threshold_max=5
+        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+        diff = cv2.absdiff(gray1, gray2)
+        mean_diff = np.mean(diff)
+        print(f"[Compare] Mean pixel difference: {mean_diff:.2f}")
+        return mean_diff > threshold_max
     
+    def _send_xy_backlash(self, x_steps, y_steps, camera_capture=None, max_retries=3):
+        """Your existing send_xy function"""
+        max_movements = 40
+        test_step = 1
+        movement_threshold = 5
+
+        x_test_step = test_step * np.sign(x_steps)
+        y_test_step = test_step * np.sign(y_steps)
+
+        print("[Backlash Check] Verifying real movement...")
+        if camera_capture is None:
+            print("[Backlash Check] Failed to capture initial frame: camarea is None")
+            return False
+
+        #check of x
+        if x_steps != 0:
+            # Capture initial x frame
+            ret1, frame_before = camera_capture.read()
+            if not ret1:
+                print("[Backlash Check] Failed to capture initial x frame: cant read")
+                return False
+
+            for attempt in range(max_movements):
+                msg = f"\x02{x_test_step},{0}\x03".encode()
+                
+                self.ser.write(msg)
+                time.sleep(0.3)
+                response = self.ser.readline().strip()
+                if response == b'NACK':
+                    print(F"[Backlash Check] X: Failed to move stage. Response: {response}")
+                    continue  # Try again
+
+                print("[Backlash Check] X:  Movement started")
+                # Wait until stage is ready
+                self._wait_until_ready()
+                            
+                print("[Backlash Check] X:Movent done")
+                # Capture new frame
+                ret2, frame_after = camera_capture.read()
+                if not ret2:
+                    print("[Backlash Check] Failed to capture frame after move: cant read")
+                    return False      
+
+                if self.frames_different(frame_before, frame_after):
+                    print("[Backlash Check] Movement detected in X after", attempt + 1, "attempt(s)")
+                    break  # Stage has moved  
+                
+                print(f"[Backlash Check] No movement detected in X after {attempt +1} attemps")
+
+        else:
+            print("[Backlash Check] No movent in x, skipping anti backlash") 
+
+        if y_steps != 0:
+            for attempt in range(max_movements):
+                # Capture initial x frame
+                ret1, frame_before = camera_capture.read()
+                if not ret1:
+                    print("[Backlash Check] Failed to capture initial y frame: cant read")
+                    return False
+
+                msg = f"\x02{0},{y_test_step}\x03".encode()
+                
+                self.ser.write(msg)
+                time.sleep(0.3)
+                response = self.ser.readline().strip()
+                if response == b'NACK':
+                    print(F"[Backlash Check] Y: Failed to move stage. Response: {response}")
+                    continue  # Try again
+
+                print("[Backlash Check] Y: Movment started")
+                # Wait until stage is ready
+                self._wait_until_ready()
+                            
+                print("[Backlash Check] Y: Movement stopped")
+                # Capture new frame
+                ret2, frame_after = camera_capture.read()
+                if not ret2:
+                    print("[Backlash Check] Y: Failed to capture frame after move: cant read")
+                    return False      
+
+                if self.frames_different(frame_before, frame_after):
+                    print("[Backlash Check] Movement detected in Y after", attempt + 1, "attempt(s)")
+                    break  # Stage has moved  
+                
+                print(f"[Backlash Check] No movement detected in Y after {attempt +1} attemps") 
+        else:
+            print("[Backlash Check] No movent in y, skipping anti backlash") 
+
+        time.sleep(1)
+        msg = f"\x02{x_steps},{y_steps}\x03".encode()
+        for attempt in range(max_retries):
+            self.ser.write(msg)
+            time.sleep(1)
+            response = self.ser.readline().strip()
+            print(F"[Backlash MOVEMENT] AFTER RESPONSE: {response}")
+            if response == b'ACK':
+                self.update_origin(x_steps, y_steps)
+                return True
+        return False
+
     def _wait_until_ready(self):
         """Your existing wait_until_ready function"""
         while True:
@@ -159,11 +272,13 @@ class StageController:
         print(f'Back to origin -> x: {x}, y: {y}')
 
     def get_status(self):
-        if self.ser and self.ser.is_open:
+        return 'DISCONNECTED'
+"""         if self.ser and self.ser.is_open:
             try:
                 self.ser.write(b'STATUS?\n')
                 status = self.ser.readline().strip()
                 return status.decode()  
             except Exception as e:
                 return 'ERROR'
-        return 'DISCONNECTED'
+        return 'DISCONNECTED' """
+        
