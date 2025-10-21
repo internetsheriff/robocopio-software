@@ -20,6 +20,16 @@ class RobocopioWindow(tkb.Window):
         self.stage_controller = StageController()
         self.stage_controller.connect()
         
+        self.status_canvas = tk.Canvas(self, width=200, height=20, highlightthickness=0, bg=self['bg'])
+        self.status_canvas.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=5)
+
+        self.status_led = self.status_canvas.create_oval(2, 2, 18, 18, fill="gray", outline="")
+
+        self.status_text = self.status_canvas.create_text(30, 12, text="Status: Unknown", anchor="w", fill="white", font=("Segoe UI", 10))
+
+
+        self.start_status_updater()
+
         # Store current screen
         self.current_screen = None
         
@@ -120,3 +130,30 @@ class RobocopioWindow(tkb.Window):
         self.screens[screen_name].on_show()
         
         print(f"Current screen is now: {self.current_screen}")
+
+    def start_status_updater(self, interval_ms=1000):
+        """Call this to begin periodic updates"""
+        self.update_status()
+        self.after(interval_ms, lambda: self.start_status_updater(interval_ms))
+
+    def update_status(self):
+        """Refresh the status label"""
+        status = self.stage_controller.get_status()
+
+        # Color and label updates
+        color = {
+            'READY': 'green',
+            'ACK': 'orange',
+            'ERROR': 'red',
+            'DISCONNECTED': 'gray'
+        }.get(status, 'gray')
+
+        text = {
+            'READY': 'READY',
+            'ACK': 'BUSY',
+            'ERROR': 'ERROR',
+            'DISCONNECTED': 'DISCONNECTED'
+        }.get(status, 'DISCONNECTED')
+
+        self.status_canvas.itemconfig(self.status_led, fill=color)
+        self.status_canvas.itemconfig(self.status_text, text=f"Status: {text}")

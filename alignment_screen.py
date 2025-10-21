@@ -60,8 +60,8 @@ class AlignmentScreen(BaseScreen):
         self.btn_toggle_cross = ttk.Button(controls_frame, text="Enable Cross", command=self.toggle_red_cross)
         self.btn_toggle_cross.pack(anchor=tk.CENTER, expand=True)
 
-        #self.btn_set_origin = ttk.Button(controls_frame, text="Set Origin", command=self.controller.stage_controller.set_origin())
-        #self.btn_set_origin.pack(anchor=tk.CENTER, expand=True)
+        self.btn_set_origin = ttk.Button(controls_frame, text="Set Origin", command=self.set_origin)
+        self.btn_set_origin.pack(anchor=tk.CENTER, expand=True)
 
         self.delay = 100  # Milliseconds
         self.update_frame()
@@ -287,6 +287,12 @@ class AlignmentScreen(BaseScreen):
             self.btn_toggle_cross.config(text="Disable Red Cross")
         else:
             self.btn_toggle_cross.config(text="Enable Red Cross")
+
+    def set_origin(self):
+        confirm = messagebox.askyesno("Confirm Set Origin", "Are you sure you want to set the current position as the origin?")
+        if confirm:
+            self.controller.stage_controller.set_origin()
+            messagebox.showinfo("Origin Set", "Origin has been successfully updated.")
 
     def on_double_click(self, event):
         x = event.x

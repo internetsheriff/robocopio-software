@@ -5,6 +5,7 @@ class BaseScreen(tk.Frame):
         super().__init__(parent)
         self.controller = controller
         self.create_widgets()
+
     
     def create_widgets(self):
         # To be implemented by subclasses

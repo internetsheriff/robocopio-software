@@ -18,16 +18,34 @@ class StageController:
             y = position.get('y', 0)
 
         self.origin = [x,y]
-    
+        
     def connect(self):
-        try:
-            self.ser = serial.Serial('COM16', 115200, timeout=1)
-            time.sleep(2)
-            self.is_connected = True
-            self.running = True
-            return True
-        except:
-            return False
+        ports = serial.tools.list_ports.comports()
+        for port in ports:
+            print(port)
+        for port in ports:
+            try:
+                print(f"Trying port: {port.device}")
+                ser = serial.Serial(port.device, 115200, timeout=1)
+                time.sleep(1)  # Give the device time to initialize
+
+                ser.write(b'STATUS?\n')
+                response = ser.readline().strip()
+
+                if response == b'READY':
+                    print(f"Connected to device at {port.device}")
+                    self.ser = ser
+                    self.is_connected = True
+                    self.running = True
+                    return True
+                else:
+                    ser.close()  # Not our device, close the port
+            except Exception as e:
+                print(f"Error with port {port.device}: {e}")
+                continue  # Try next port
+
+        print("Device not found.")
+        return False
     
     def set_sequence_callback(self, callback):
         """Set callback for UI notifications"""
@@ -139,3 +157,13 @@ class StageController:
         x = - self.origin[0]
         y = - self.origin[1]
         print(f'Back to origin -> x: {x}, y: {y}')
+
+    def get_status(self):
+        if self.ser and self.ser.is_open:
+            try:
+                self.ser.write(b'STATUS?\n')
+                status = self.ser.readline().strip()
+                return status.decode()  
+            except Exception as e:
+                return 'ERROR'
+        return 'DISCONNECTED'
