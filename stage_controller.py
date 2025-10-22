@@ -15,6 +15,8 @@ class StageController:
         self.pause_event.set()  # Start unpaused
         self.sequence_callback = None  # For UI notifications
 
+        
+
         with open('position.yaml', 'r') as file:
             position = yaml.safe_load(file)
             x = position.get('x', 0)
@@ -39,7 +41,7 @@ class StageController:
                     print(f"Connected to device at {port.device}")
                     self.ser = ser
                     self.is_connected = True
-                    self.running = True
+                    self.running = False
                     return True
                 else:
                     ser.close()  # Not our device, close the port
@@ -66,6 +68,7 @@ class StageController:
 
         print(f'Sending x: {x_steps}, y: {y_steps}')
 
+        t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
         t1.start()
@@ -123,6 +126,7 @@ class StageController:
     
     def _send_xy(self, x_steps, y_steps, max_retries=3):
         """Your existing send_xy function"""
+        self.running = True
         msg = f"\x02{x_steps},{y_steps}\x03".encode()
         for attempt in range(max_retries):
             self.ser.write(msg)
@@ -130,21 +134,39 @@ class StageController:
             response = self.ser.readline().strip()
             if response == b'ACK':
                 self.update_origin(x_steps, y_steps)
+                self.running = False
                 return True
         return False
 
-    def frames_different(self, frame1, frame2):
-        threshold_max=5
+    def frames_different_abs(self, frame1, frame2):
+        threshold_max=7
         gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
         gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
         diff = cv2.absdiff(gray1, gray2)
         mean_diff = np.mean(diff)
         print(f"[Compare] Mean pixel difference: {mean_diff:.2f}")
         return mean_diff > threshold_max
-    
+        
+    def frames_different_phase(self, frame1, frame2, shift_threshold=0.5):
+        gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+        gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+
+        # Convert to float32 as required by phaseCorrelate
+        gray1 = np.float32(gray1)
+        gray2 = np.float32(gray2)
+
+        shift, response = cv2.phaseCorrelate(gray1, gray2)
+        dx, dy = shift
+        magnitude = np.hypot(dx, dy)
+
+        print(f"[Compare] Phase shift detected: dx={dx:.2f}, dy={dy:.2f}, magnitude={magnitude:.2f}")
+
+        return magnitude > shift_threshold
+
     def _send_xy_backlash(self, x_steps, y_steps, camera_capture=None, max_retries=3):
         """Your existing send_xy function"""
-        max_movements = 40
+        self.running = True
+        max_movements = 100
         test_step = 1
         movement_threshold = 5
 
@@ -168,15 +190,16 @@ class StageController:
                 msg = f"\x02{x_test_step},{0}\x03".encode()
                 
                 self.ser.write(msg)
-                time.sleep(0.3)
-                response = self.ser.readline().strip()
-                if response == b'NACK':
-                    print(F"[Backlash Check] X: Failed to move stage. Response: {response}")
-                    continue  # Try again
+                #time.sleep(0.3)
+                #response = self.ser.readline().strip()
+                #if response == b'NACK':
+                #    print(F"[Backlash Check] X: Failed to move stage. Response: {response}")
+                #    continue  # Try again
 
                 print("[Backlash Check] X:  Movement started")
                 # Wait until stage is ready
-                self._wait_until_ready()
+                #self._wait_until_ready()
+                time.sleep(0.1)
                             
                 print("[Backlash Check] X:Movent done")
                 # Capture new frame
@@ -185,7 +208,7 @@ class StageController:
                     print("[Backlash Check] Failed to capture frame after move: cant read")
                     return False      
 
-                if self.frames_different(frame_before, frame_after):
+                if self.frames_different_phase(frame_before, frame_after):
                     print("[Backlash Check] Movement detected in X after", attempt + 1, "attempt(s)")
                     break  # Stage has moved  
                 
@@ -205,15 +228,16 @@ class StageController:
                 msg = f"\x02{0},{y_test_step}\x03".encode()
                 
                 self.ser.write(msg)
-                time.sleep(0.3)
-                response = self.ser.readline().strip()
-                if response == b'NACK':
-                    print(F"[Backlash Check] Y: Failed to move stage. Response: {response}")
-                    continue  # Try again
+                #time.sleep(0.3)
+                #response = self.ser.readline().strip()
+                #if response == b'NACK':
+                #    print(F"[Backlash Check] Y: Failed to move stage. Response: {response}")
+                #    continue  # Try again
 
                 print("[Backlash Check] Y: Movment started")
                 # Wait until stage is ready
-                self._wait_until_ready()
+                #self._wait_until_ready()
+                time.sleep(0.1)
                             
                 print("[Backlash Check] Y: Movement stopped")
                 # Capture new frame
@@ -222,7 +246,7 @@ class StageController:
                     print("[Backlash Check] Y: Failed to capture frame after move: cant read")
                     return False      
 
-                if self.frames_different(frame_before, frame_after):
+                if self.frames_different_phase(frame_before, frame_after):
                     print("[Backlash Check] Movement detected in Y after", attempt + 1, "attempt(s)")
                     break  # Stage has moved  
                 
@@ -230,24 +254,40 @@ class StageController:
         else:
             print("[Backlash Check] No movent in y, skipping anti backlash") 
 
-        time.sleep(1)
-        msg = f"\x02{x_steps},{y_steps}\x03".encode()
+        time.sleep(2)
+        msg = f"\x02{x_steps-2},{y_steps-2}\x03".encode()
         for attempt in range(max_retries):
             self.ser.write(msg)
-            time.sleep(1)
-            response = self.ser.readline().strip()
-            print(F"[Backlash MOVEMENT] AFTER RESPONSE: {response}")
-            if response == b'ACK':
+            responses = []
+
+            deadline = time.time() + 0.2
+            while time.time() < deadline:
+                if self.ser.in_waiting:
+                    line = self.ser.readline().strip()
+                    if line:
+                        responses.append(line)
+                        # Optional: stop early if ACK is found
+                        if line == b'ACK':
+                            break
+                else:
+                    time.sleep(0.05)
+
+            print(f"[Stage] Responses: {responses}")
+
+            if b'ACK' in responses:
                 self.update_origin(x_steps, y_steps)
+                self.running = False
                 return True
         return False
 
     def _wait_until_ready(self):
         """Your existing wait_until_ready function"""
+        self.running = True
         while True:
             self.ser.write(b'STATUS?\n')
             status = self.ser.readline().strip()
             if status == b'READY':
+                self.running = False
                 return
             time.sleep(0.2)
 
@@ -272,7 +312,22 @@ class StageController:
         print(f'Back to origin -> x: {x}, y: {y}')
 
     def get_status(self):
+        print(f'[GET STATUS] Func called: Running flag: {self.running} Ser is open: {self.ser.is_open}')
+        if self.ser and self.ser.is_open:
+            print(f'[GET STATUS] Considered connected! Running flag: {self.running} Ser is open: {self.ser.is_open}')
+            if self.running:
+                print(f'[GET STATUS] Considered connected AND running! Running flag: {self.running}  Ser is open: {self.ser.is_open}')
+                return 'BUSY'
+            else: 
+                try:
+                    self.ser.write(b'STATUS?\n')
+                    status = self.ser.readline().strip()
+                    print(f'[GET STATUS] Considered connected NOT running! Running flag: {self.running} Ser is open: {self.ser.is_open} Status: {status}')
+                    return status.decode()  
+                except Exception as e:
+                    return 'ERROR'
         return 'DISCONNECTED'
+
 """         if self.ser and self.ser.is_open:
             try:
                 self.ser.write(b'STATUS?\n')
