@@ -11,6 +11,7 @@ class StageController:
         self.ser = None
         self.is_connected = False
         self.running = False
+        self.backlash_release = False
         self.pause_event = threading.Event()
         self.pause_event.set()  # Start unpaused
         self.sequence_callback = None  # For UI notifications
@@ -69,32 +70,35 @@ class StageController:
         print(f'Sending x: {x_steps}, y: {y_steps}')
 
         t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
-        t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
+        #t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
         t1.start()
 
     
-    def move_sequence(self, movements_list, app_data, experiment_folder, camera_capture):
+    def move_sequence(self, app_data):
         """Execute movement sequence with pauses and image capture"""
         if not self.is_connected:
             return False
         
         thread = threading.Thread(
             target=self._move_sequence_thread,
-            args=(movements_list, app_data, experiment_folder, camera_capture)
+            args=(app_data,)
         )
         thread.daemon = True
         thread.start()
         return True
     
-    def _move_sequence_thread(self, movements_list, app_data, experiment_folder, camera_capture):
+    def _move_sequence_thread(self, app_data):
         """Background thread that replicates your exact workflow"""
-        for idx, movement in enumerate(movements_list):
+        print(app_data.movements_list)
+        for idx, movement in enumerate(app_data.movements_list):
             # Convert meters to steps
             dx_steps = int(movement[0] / app_data.meters_per_step_x)
             dy_steps = int(movement[1] / app_data.meters_per_step_y)
             
             # Move stage
+            #self._send_xy_backlash(dx_steps, dy_steps, app_data.cap)
+            #self._wait_until_ready_backlash()
             self._send_xy(dx_steps, dy_steps)
             self._wait_until_ready()
             
@@ -108,12 +112,13 @@ class StageController:
                 self.pause_event.wait()
             
             # Capture image after every movement
-            ret, frame = camera_capture.read()
-            if ret:
-                cv2.imwrite(f'{experiment_folder}/{movement[2]}.png', frame)
-                print(f'Image saved: {experiment_folder}/{movement[2]}.png')
             
-            print(f'Completed movement {idx+1}/{len(movements_list)}: {movement[2]}')
+            ret, frame = app_data.cap.read()
+            if ret:
+                cv2.imwrite(f'{app_data.experiment_folder}/{movement[2]}.png', frame)
+                print(f'Image saved: {app_data.experiment_folder}/{movement[2]}.png')
+            
+            print(f'Completed movement {idx+1}/{len(app_data.movements_list)}: {movement[2]}')
         
         # Notify completion
         if self.sequence_callback:
@@ -166,6 +171,7 @@ class StageController:
     def _send_xy_backlash(self, x_steps, y_steps, camera_capture=None, max_retries=3):
         """Your existing send_xy function"""
         self.running = True
+        self.backlash_release = False
         max_movements = 100
         test_step = 1
         movement_threshold = 5
@@ -277,6 +283,7 @@ class StageController:
             if b'ACK' in responses:
                 self.update_origin(x_steps, y_steps)
                 self.running = False
+                self.backlash_release = True
                 return True
         return False
 
@@ -289,6 +296,18 @@ class StageController:
             if status == b'READY':
                 self.running = False
                 return
+            time.sleep(0.2)
+
+    def _wait_until_ready_backlash(self):
+        """Your existing wait_until_ready function"""
+        self.running = True
+        while True:
+            if self.backlash_release:
+                self.ser.write(b'STATUS?\n')
+                status = self.ser.readline().strip()
+                if status == b'READY':
+                    self.running = False
+                    return
             time.sleep(0.2)
 
     def update_origin(self, x, y):
@@ -306,10 +325,14 @@ class StageController:
             yaml.dump(data, file)
         print('NEW ORIGIN SET')
 
-    def to_origin(self):
+    def to_origin(self, app_data):
         x = - self.origin[0]
         y = - self.origin[1]
         print(f'Back to origin -> x: {x}, y: {y}')
+        t1 = threading.Thread(target=self._send_xy_backlash, args=(x, y, app_data.cap))
+        #t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
+        #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
+        t1.start()
 
     def get_status(self):
         print(f'[GET STATUS] Func called: Running flag: {self.running} Ser is open: {self.ser.is_open}')
@@ -319,13 +342,7 @@ class StageController:
                 print(f'[GET STATUS] Considered connected AND running! Running flag: {self.running}  Ser is open: {self.ser.is_open}')
                 return 'BUSY'
             else: 
-                try:
-                    self.ser.write(b'STATUS?\n')
-                    status = self.ser.readline().strip()
-                    print(f'[GET STATUS] Considered connected NOT running! Running flag: {self.running} Ser is open: {self.ser.is_open} Status: {status}')
-                    return status.decode()  
-                except Exception as e:
-                    return 'ERROR'
+                return 'READY'
         return 'DISCONNECTED'
 
 """         if self.ser and self.ser.is_open:

@@ -29,9 +29,7 @@ class AlignmentScreen(BaseScreen):
         #self.config(bg='black')
         print("align screen shown")
 
-        # Initialize AppData instead of using globals
-        self.data = AppData()
-        self.data.initialize_hardware()
+
 
         # Split screen: video feed on left, controls on right
         content_frame = ttk.Frame(self)
@@ -98,7 +96,7 @@ class AlignmentScreen(BaseScreen):
         self.btn_left.grid(row=1, column=0, padx=5, pady=5)
         
         self.btn_stop = ttk.Button(arrows_frame, text="●", width=btn_size,
-                                 command=lambda: self.controller.stage_controller.to_origin())
+                                 command=lambda: self.controller.stage_controller.to_origin(self.data))
         self.btn_stop.grid(row=1, column=1, padx=5, pady=5)
         
         self.btn_right = ttk.Button(arrows_frame, text="→", width=btn_size,
@@ -274,12 +272,13 @@ class AlignmentScreen(BaseScreen):
         #os.mkdir(experiment_folder)
 
     def start_movement(self):
-        move_stage_backgorund(self)
+        self.controller.stage_controller.move_sequence(self.data)
+        #move_stage_backgorund(self)
 
-    def ask_confirmation(self):
-        response = messagebox.askyesno("Confirmation", "Continue movement?")
-        if response:  # User clicked "Yes"
-            pause_event.set()  # Resume the thread
+    #def ask_confirmation(self):
+    #    response = messagebox.askyesno("Confirmation", "Continue movement?")
+    #    if response:  # User clicked "Yes"
+    #        pause_event.set()  # Resume the thread
 
     def toggle_red_cross(self):
         self.red_cross_enabled = not self.red_cross_enabled

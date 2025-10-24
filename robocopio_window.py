@@ -6,6 +6,7 @@ from ttkbootstrap.constants import *
 from configuration_screen import *
 from alignment_screen import *
 from run_screen import *
+from planning_screen import *
 
 from stage_controller import *
 
@@ -19,6 +20,9 @@ class RobocopioWindow(tkb.Window):
 
         self.stage_controller = StageController()
         self.stage_controller.connect()
+        self.stage_controller.set_sequence_callback(self.on_stage_sequence_event)
+
+
         
         self.status_canvas = tk.Canvas(self, width=200, height=20, highlightthickness=0, bg=self['bg'])
         self.status_canvas.pack(side=tk.TOP, anchor=tk.W, padx=10, pady=5)
@@ -63,7 +67,8 @@ class RobocopioWindow(tkb.Window):
         # Navigation buttons - full height from top to bottom
         nav_buttons = [
             ("⚙️ Configuration", "configuration"),
-            ("🎯 Alignment", "alignment"), 
+            ("🎯 Alignment", "alignment"),
+            ("🧩 Plan", "plan"), 
             ("🚀 Run Experiment", "run")
         ]
         
@@ -97,6 +102,13 @@ class RobocopioWindow(tkb.Window):
         except Exception as e:
             print(f"Error creating alignment screen: {e}")
         
+        try:
+            print("Creating planning screen...")
+            self.screens["plan"] = PlanningScreen(self.content_frame, self)
+            print("Planning screen created successfully")
+        except Exception as e:
+            print(f"Error creating run screen: {e}")
+
         try:
             print("Creating run screen...")
             self.screens["run"] = RunScreen(self.content_frame, self)
@@ -143,17 +155,34 @@ class RobocopioWindow(tkb.Window):
         # Color and label updates
         color = {
             'READY': 'green',
-            'ACK': 'orange',
+            'BUSY': 'orange',
             'ERROR': 'red',
             'DISCONNECTED': 'gray'
         }.get(status, 'gray')
 
         text = {
             'READY': 'READY',
-            'ACK': 'BUSY',
+            'BUSY': 'BUSY',
             'ERROR': 'ERROR',
             'DISCONNECTED': 'DISCONNECTED'
         }.get(status, 'DISCONNECTED')
 
         self.status_canvas.itemconfig(self.status_led, fill=color)
         self.status_canvas.itemconfig(self.status_text, text=f"Status: {text}")
+
+    def on_stage_sequence_event(self, movement_name, event_type):
+        """Handle events coming from the StageController"""
+        if event_type == "NEEDS_FOCUS":
+            # Must schedule UI updates on main thread (Tkinter is not thread-safe)
+            self.after(0, lambda: self.show_focus_popup(movement_name))
+        elif event_type == "SEQUENCE_COMPLETE":
+            self.after(0, lambda: messagebox.showinfo("Sequence", "Stage sequence completed!"))
+
+    def show_focus_popup(self, movement_name):
+        """Ask the user to confirm after manual focus adjustment"""
+        answer = messagebox.askokcancel(
+            "Manual Focus Needed",
+            f"Please adjust focus at position '{movement_name}'.\n\nClick OK to continue."
+        )
+        if answer:
+            self.stage_controller.resume_sequence()
