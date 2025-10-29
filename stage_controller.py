@@ -60,19 +60,34 @@ class StageController:
     def move_xy(self, x_meters, y_meters, app_data, max_retries = 3):
         #self._send_xy(x, y)
         #    wait_until_ready()
-        print(f'Received x: {x_meters}, y: {y_meters} meters')
-        print(f'Meters per step x: {app_data.meters_per_step_x}')
-        print(f'Meters per step y: {app_data.meters_per_step_y}')
+        print(f'[Move] Received x: {x_meters}, y: {y_meters} meters, mode : {app_data.mode}')
+        print(f'[Move] Meters per step x: {app_data.meters_per_step_x}')
+        print(f'[Move] Meters per step y: {app_data.meters_per_step_y}')
 
         x_steps = int(x_meters / app_data.meters_per_step_x)
         y_steps = int(y_meters / app_data.meters_per_step_y)
 
-        print(f'Sending x: {x_steps}, y: {y_steps}')
+        print(f'[Move] Sending x: {x_steps}, y: {y_steps}')
 
-        t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
+        if app_data.mode == "Backlash correction off":
+            print("[Move] Using standard _send_xy()")
+            t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
+            t1.start()
+
+        elif app_data.mode == "Backlash correction on - Mode ABS diff":
+            print("[Move] Using backlash correction with ABS diff mode")
+            t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap, app_data.mode))
+            t1.start()
+
+        elif app_data.mode == "Backlash correction on - Mode Image Phase":
+            print("[Move] Using backlash correction with Image Phase mode")
+            t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap, app_data.mode))
+            t1.start()
+
+        #t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
-        t1.start()
+        #t1.start()
 
     
     def move_sequence(self, app_data):
@@ -99,7 +114,20 @@ class StageController:
             # Move stage
             #self._send_xy_backlash(dx_steps, dy_steps, app_data.cap)
             #self._wait_until_ready_backlash()
-            self._send_xy(dx_steps, dy_steps)
+
+            if app_data.mode == "Backlash correction off":
+                print("[Move] Using standard _send_xy()")
+                self._send_xy(dx_steps, dy_steps)
+
+            elif app_data.mode == "Backlash correction on - Mode ABS diff":
+                print("[Move] Using backlash correction with ABS diff mode")
+                self._send_xy_backlash(dx_steps, dy_steps, app_data.cap, app_data.mode)
+
+            elif app_data.mode == "Backlash correction on - Mode Image Phase":
+                print("[Move] Using backlash correction with Image Phase mode")
+                self._send_xy_backlash(dx_steps, dy_steps, app_data.cap, app_data.mode)
+
+            #self._send_xy(dx_steps, dy_steps)
             self._wait_until_ready()
             
             # Check if STOP point for manual focus
@@ -143,6 +171,7 @@ class StageController:
                 return True
         return False
 
+
     def frames_different_abs(self, frame1, frame2):
         threshold_max=7
         gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
@@ -165,10 +194,9 @@ class StageController:
         magnitude = np.hypot(dx, dy)
 
         print(f"[Compare] Phase shift detected: dx={dx:.2f}, dy={dy:.2f}, magnitude={magnitude:.2f}")
-
         return magnitude > shift_threshold
 
-    def _send_xy_backlash(self, x_steps, y_steps, camera_capture=None, max_retries=3):
+    def _send_xy_backlash(self, x_steps, y_steps, camera_capture=None, mode="Backlash correction on - Mode Image Phase", max_retries=3):
         """Your existing send_xy function"""
         self.running = True
         self.backlash_release = False
@@ -214,9 +242,15 @@ class StageController:
                     print("[Backlash Check] Failed to capture frame after move: cant read")
                     return False      
 
-                if self.frames_different_phase(frame_before, frame_after):
-                    print("[Backlash Check] Movement detected in X after", attempt + 1, "attempt(s)")
-                    break  # Stage has moved  
+                if mode == "Backlash correction on - Mode ABS diff":
+                    if self.frames_different_abs(frame_before, frame_after):
+                        print("[Backlash Check] Movement detected in X after", attempt + 1, "attempt(s)")
+                        break  # Stage has moved  
+
+                elif mode == "Backlash correction on - Mode Image Phase":
+                    if self.frames_different_phase(frame_before, frame_after):
+                        print("[Backlash Check] Movement detected in X after", attempt + 1, "attempt(s)")
+                        break  # Stage has moved  
                 
                 print(f"[Backlash Check] No movement detected in X after {attempt +1} attemps")
 
@@ -325,14 +359,29 @@ class StageController:
             yaml.dump(data, file)
         print('NEW ORIGIN SET')
 
-    def to_origin(self, app_data):
+    def to_origin(self, app_data, mode):
         x = - self.origin[0]
         y = - self.origin[1]
         print(f'Back to origin -> x: {x}, y: {y}')
-        t1 = threading.Thread(target=self._send_xy_backlash, args=(x, y, app_data.cap))
+
+        if mode == "Backlash correction off":
+            print("[To origin] Using standard _send_xy()")
+            t1 = threading.Thread(target=self._send_xy, args=(x, y))
+            t1.start()
+
+        elif mode == "Backlash correction on - Mode ABS diff":
+            print("[To origin] Using backlash correction with ABS diff mode")
+            t1 = threading.Thread(target=self._send_xy_backlash, args=(x, y, app_data.cap, mode))
+            t1.start()
+
+        elif mode == "Backlash correction on - Mode Image Phase":
+            print("[To origin] Using backlash correction with Image Phase mode")
+            t1 = threading.Thread(target=self._send_xy_backlash, args=(x, y, app_data.cap, mode))
+            t1.start()
+        #t1 = threading.Thread(target=self._send_xy_backlash, args=(x, y, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy_backlash, args=(x_steps, y_steps, app_data.cap))
         #t1 = threading.Thread(target=self._send_xy, args=(x_steps, y_steps))
-        t1.start()
+        #t1.start()
 
     def get_status(self):
         print(f'[GET STATUS] Func called: Running flag: {self.running} Ser is open: {self.ser.is_open}')

@@ -47,6 +47,33 @@ class AlignmentScreen(BaseScreen):
 
         self.create_stage_controls(controls_frame)
 
+
+        # --- Backlash Correction Selection Box ---
+        ttk.Label(controls_frame, text="Backlash Correction:").pack(anchor=tk.CENTER, pady=(10, 5))
+
+        self.backlash_mode = tk.StringVar(value="off")
+
+        backlash_options = [
+            "Backlash correction off",
+            "Backlash correction on - Mode ABS diff",
+            "Backlash correction on - Mode Image Phase"
+        ]
+
+        self.backlash_select = ttk.Combobox(
+            controls_frame,
+            textvariable=self.backlash_mode,
+            values=backlash_options,
+            state="readonly",
+            width=30
+        )
+        self.backlash_select.pack(anchor=tk.CENTER, pady=5)
+        self.backlash_select.current(0)
+
+        self.backlash_select.bind("<<ComboboxSelected>>", self.on_mode_change)
+
+        # Initialize data mode immediately
+        self.data.mode = self.backlash_mode.get()
+
         self.btn_snapshot = ttk.Button(controls_frame, text="Calculate shit", command=self.calculate_movment)
         self.btn_snapshot.pack(anchor=tk.CENTER, expand=True)
 
@@ -96,7 +123,7 @@ class AlignmentScreen(BaseScreen):
         self.btn_left.grid(row=1, column=0, padx=5, pady=5)
         
         self.btn_stop = ttk.Button(arrows_frame, text="●", width=btn_size,
-                                 command=lambda: self.controller.stage_controller.to_origin(self.data))
+                                 command=lambda: self.controller.stage_controller.to_origin(self.data, self.backlash_mode.get()))
         self.btn_stop.grid(row=1, column=1, padx=5, pady=5)
         
         self.btn_right = ttk.Button(arrows_frame, text="→", width=btn_size,
@@ -293,7 +320,14 @@ class AlignmentScreen(BaseScreen):
             self.controller.stage_controller.set_origin()
             messagebox.showinfo("Origin Set", "Origin has been successfully updated.")
 
+    # --- Automatically update self.data.mode when changed ---
+    def on_mode_change(self, event=None):
+        selected_mode = self.backlash_mode.get()
+        self.data.mode = selected_mode
+        print(f"[Mode] Changed to: {self.data.mode}")
+
     def on_double_click(self, event):
+        mode = self.backlash_mode.get()
         x = event.x
         y = event.y
         dist_x_pixels = x - 640/2
@@ -307,7 +341,8 @@ class AlignmentScreen(BaseScreen):
 
     def move_stage_meters(self, x_meters, y_meters, app_data):
         # Convert meters to steps using appdata configuration
-        print(f'Received {y_meters} meters')
+        mode = self.backlash_mode.get()
+        print(f'Received {y_meters} meters, mode = {mode}')
         #print(f'Meters per step =  {self.data.meters_per_step_y}')
         #print(f'Sending: {int(y_meters / self.data.meters_per_step_y)}')
         #x_steps = int(x_meters / self.data.meters_per_step_x)

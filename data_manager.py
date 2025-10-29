@@ -32,6 +32,7 @@ class AppData:
         self.pause_event = threading.Event()
         self._cap = None
         self._ser = None
+        self.mode = "Backlash correction off"
         
         # Runtime Data
         self.picture_positions = []

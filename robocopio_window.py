@@ -9,11 +9,16 @@ from run_screen import *
 from planning_screen import *
 
 from stage_controller import *
+from data_manager import *
 
 class RobocopioWindow(tkb.Window):
     def __init__(self, window_title="Camera Application"):
         super().__init__(themename="darkly")
         self.title(window_title)
+
+        # Initialize AppData instead of using globals
+        self.data = AppData()
+        self.data.initialize_hardware()
 
         #self.style = ttk.Style()
         #self.style.theme_use('clam')  # Windows modern theme

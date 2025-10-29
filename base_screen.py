@@ -6,11 +6,11 @@ class BaseScreen(tk.Frame):
     def __init__(self, parent, controller):
         super().__init__(parent)
         self.controller = controller
+
+        self.data = controller.data
+
         self.create_widgets()
 
-        # Initialize AppData instead of using globals
-        self.data = AppData()
-        self.data.initialize_hardware()
 
     
     def create_widgets(self):
