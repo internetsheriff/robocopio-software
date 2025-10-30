@@ -154,7 +154,7 @@ class AlignmentScreen(BaseScreen):
         center_y = height // 2
         
         # Define cross size
-        cross_size = 30
+        cross_size = 300
         
         # Draw horizontal line (red color in BGR format)
         cv2.line(frame, 
@@ -219,9 +219,16 @@ class AlignmentScreen(BaseScreen):
         #    self.data.border_positions.append((0, dy))  # (0, y)
         #    print(f'Point added: {(0, dy)}')
 
-        for delta in [-self.data.border_from_center, self.data.border_from_center]:
-            self.data.border_positions.append((delta, 0, 0 , 0))
-            self.data.border_positions.append((0, delta, self.data.border_matrix_side, 0))
+        if self.data.border_matrix_side != 0:
+            for y_label, y_sign in zip([0, self.data.border_matrix_side], [-1, 1]):
+                for x_label, x_sign in zip([0, self.data.border_matrix_side], [-1, 1]):
+                    px = x_sign * self.data.border_from_center
+                    py = y_sign * self.data.border_from_center
+                    self.data.border_positions.append((px, py, y_label, x_label))
+
+        #for delta in [-self.data.border_from_center, self.data.border_from_center]:
+        #    self.data.border_positions.append((delta, 0, 0 , 0))
+        #    self.data.border_positions.append((0, delta, self.data.border_matrix_side, 0))
 
         for point in self.data.border_positions:
             print(point)

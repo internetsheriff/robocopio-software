@@ -384,11 +384,11 @@ class StageController:
         #t1.start()
 
     def get_status(self):
-        print(f'[GET STATUS] Func called: Running flag: {self.running} Ser is open: {self.ser.is_open}')
+        #print(f'[GET STATUS] Func called: Running flag: {self.running} Ser is open: {self.ser.is_open}')
         if self.ser and self.ser.is_open:
-            print(f'[GET STATUS] Considered connected! Running flag: {self.running} Ser is open: {self.ser.is_open}')
+            #print(f'[GET STATUS] Considered connected! Running flag: {self.running} Ser is open: {self.ser.is_open}')
             if self.running:
-                print(f'[GET STATUS] Considered connected AND running! Running flag: {self.running}  Ser is open: {self.ser.is_open}')
+                #print(f'[GET STATUS] Considered connected AND running! Running flag: {self.running}  Ser is open: {self.ser.is_open}')
                 return 'BUSY'
             else: 
                 return 'READY'
